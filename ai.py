@@ -1,7 +1,10 @@
 import re
+import graphviz
+import IPython
 import numpy as np
 import pandas as pd
 
+from sklearn.tree import export_graphviz
 from pandas.api.types import is_string_dtype, is_numeric_dtype
 
 def display_all(dataframe):
@@ -110,8 +113,7 @@ def convert_to_categorical(dataframe):
             dataframe[feature_name] = column_data.astype('category').cat.as_ordered()
 
 
-def preprocess_dataframe(dataframe, target_field=None, skip_fields=None, ignored_fields=None, na_dict=None, preprocess_function=None, 
-        max_n_cat=None, subset=None):
+def preprocess_dataframe(dataframe, target_field=None, skip_fields=None, ignored_fields=None, na_dict=None, preprocess_function=None, max_n_cat=None, subset=None):
     """
     preprocess_dataframe takes a dataframe and splits off the dependent variable, and changes the dataframe into an entirely numeric dataframe. 
     For each column of the dataframe which is not in skip_fields nor in ignore_fields, NA values are replaced by the median value of the column.
@@ -297,10 +299,18 @@ def numericalize(dataframe, column_data, feature_name, max_n_cat):
     """
     if not is_numeric_dtype(column_data) and ( max_n_cat is None or len(column_data.cat.categories) > max_n_cat):
         dataframe[feature_name] = pd.Categorical(column_data).codes + 1
-    
-    
-    
 
-        
 
-        
+def draw_tree(tree, dataframe, size=10, ratio=0.6, precision=0):
+    """
+    Draws a representation of a random forest in IPython.
+
+    Parameters:
+    -----------
+    tree: The tree you wish to draw
+    dataframe: The data used to train the tree. This is used to get the names of the features.
+    """
+    s = export_graphviz(tree, out_file=None, feature_names=dataframe.columns, filled=True,
+                      special_characters=True, rotate=True, precision=precision)
+    
+    IPython.display.display(graphviz.Source(re.sub('Tree {',f'Tree {{ size={size}; ratio={ratio}', s)))    
