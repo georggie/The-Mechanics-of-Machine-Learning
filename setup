@@ -1,0 +1,16 @@
+WINDOWS
+
+Dependencies:
+
+* VSCode
+* VSCode Python extension
+* Ubunut subsystem on Windows
+
+- To create a new project's virtual environment use:
+$ ~/.local/bin/virtualenv <name-of-virtual-environment>
+
+- To access the Linux subsystem from Windows system type in the search bar:
+$ \\wsl$
+
+- To install basic python libraries use:
+$ pip3 install pandas, numpy, jupyterlab, sklearn
