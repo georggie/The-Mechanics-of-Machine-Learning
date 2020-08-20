@@ -229,3 +229,66 @@ df['category_nominal'] = df['category_nominal'].map(counts)
 
 Creating features that incorporate information about the target variable is called target encoding and is often used to derive features from categorical variables to great effect. One of the most common target encodings is called **_mean encoding_**, which replaces each category value with the average target value associated with that category.
 
+## 5. Train, Validate, Test
+
+Developing a machine learning model requires three sets of observations: training, validation, and test sets. The model trains just on the training set and model accuracy is evaluated using the validation set during development. After tuning the model on the validation set, we run the test set through the model to get our final measure of model accuracy and generality. If we peek at the test set and run it through an intermediate model rather than our final model, the test set becomes just another validation set. Every change made to a model after testing it on a dataset, tailors the model to that dataset; that dataset is no longer an objective measure of generality. To develop a model in practice, we're usually given a single dataset, rather than separate training, validation, and test sets. That means we need a general procedure for splitting datasets appropriately.
+
+### Splitting time-insensitive datasets
+
+For datasets that do not change significantly over the time period of interest, we want to extract validation and test sets using random sampling of records. This is called the **holdout method**. To get (roughly) 70% of dataframe df into training and 15% into both validation and test sets, we can do this:
+
+```
+from sklearn.model_selection import train_test_split
+
+# shuffle data
+df = df.sample(frac=1)
+
+df_dev, df_test = train_test_split(df, test_size=0.15)
+df_train, df_valid = train_test_split(df_dev, test_size=0.15)
+```
+
+After training a model using **_df\_train_**, we'd run **_df\_valid_** data through the model and compute a metric, such as R<sup>2</sup>. Then we'd tune the model so that it's more accurate on **_df\_valid_** data. When we're happy with the model, we'd finally use **_df\_test_** to measure generality.
+
+Another method is called **k-fold cross validation** that splits the dataset into **k** chunks of equal size. We train the model on **k-1** chunks and test it on the other, repeating the procedure **k** times so that we every chunk gets used as a validation set. The overall validation error is the average of the **k** validation errors. 
+
+Here's how to use sklearn for 5-fold cross validation using an RF model:
+
+```
+from sklearn.model_selection import cross_val_score
+
+rf = RandomForestRegressor(...)
+scores = cross_val_score(rf, X, y, cv=5) # k=5
+
+print(scores.mean())
+```
+
+Cross validation and repeated subsampling are excellent techniques for measuring model accuracy, but are unsuitable for time-sensitive datasets.
+
+### Splitting time-sensitive datasets
+
+When observation features or target variables change meaningfully over time, random extraction of validation sets isn't appropriate. Randomly splitting a dataset would yield training and validation sets that overlap in time. That's a problem because it allows the model to train on data from the future and validation metrics would be overly optimistic. Imagine how your model would be used in practice. At some point, you must train a model on the data you have and then deploy it. Any observations subsequently submitted to the model for prediction are necessarily from dates beyond the end of the data used to train the model. Training should always mimic deployment and so our validation set should be from dates beyond the end of the training set.
+
+The process for extracting training, validation, and test sets for time-sensitive data is:
+
+- Sort the records by date, earliest to latest
+- Extract the last, say, 15% of the records as **_df\_test_**
+- Extract the second to last 15% of the records as **_df\_valid_**
+- The remaining 70% of the original data is **_df\_train_**
+
+In an ideal world, datasets would be purely numeric and without missing values. Feature engineering would still be useful, but numericalizing data such as encoding categorical variables, wouldn't be necessary. And we wouldn't have to conjure up missing values. However, real-world datasets are full of categorical variables and riddled with missing values, which introduces synchronization issues between training and validation/test sets.
+
+- If category CAT1 in column COL is encoded as integer value 1 in the training set, the validation and test set must use the same encoding of 1.
+
+- Missing categorical values should be encoded as integer 0 in all sets.
+
+- Missing numeric values in column COL should be filled with the median of just those values from COL in the training set.
+
+- Categorical values in validation or test sets not present in the training set, should be encoded as integer 0; the model has never seen those values, so we encode such values as if they were missing.
+
+We can abstract that list into these important rules for preparing separated training and test sets:
+
+1. Transformations must be applied to features consistently across data subsets.
+
+2. Transformations of validation and test sets can only use data derived from the training set.
+
+To follow those rules, we have to remember all transformations done to the training set for later application to the validation and test sets. In practice, that means tracking the median of all numeric columns, all category to category-to-code mappings, and which categories were one-hot encoded. Special care is required to ensure that one-hot encoded variables use the same name and number of columns in the training and testing sets. It sounds simple enough, but it's easy to screw up the synchronization between training and testing sets. Synchronization bugs usually show up as poor model accuracy, rather than as something obvious like a program exception.
